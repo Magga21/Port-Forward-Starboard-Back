@@ -7,7 +7,7 @@
 #include <iostream>
 #include <unistd.h>
 
-// Helper functions
+// Helper functions to solve the puzzles
 // NOT SURE ABOUT THE PARAMETERS!
 void solveSecret(int sockfd, sockaddr_in destaddr) {
 
@@ -25,7 +25,13 @@ void solveDragon(int sockfd, sockaddr_in destaddr) {
 
 }
 
-// Main function
+/*
+PUZZLE SOLVER
+-------------
+This program takes in an IP address and four puzzle ports.
+It finds which puzzle belongs to which port and then solves each puzzle.
+------------- 
+*/
 int main(int argc, const char* argv[]){
 
 	// Make sure that the function call is correct
@@ -41,8 +47,7 @@ int main(int argc, const char* argv[]){
     int port3 = std::stoi(argv[4]);
     int port4 = std::stoi(argv[5]);
 
-    // Array containing all ports from command line
-    int ports[4] = {port1, port2, port3, port4};
+    int ports[4] = {port1, port2, port3, port4};    // Array containing all ports
 
     // Create UDP socket
 	int sockfd;
@@ -60,39 +65,92 @@ int main(int argc, const char* argv[]){
 		exit(1);
 	}
 
-    // Loop through the ports (array) to find each puzzle
+    // Loop through the ports to find which puzzle belongs to each port
     for (int i = 0; i < 4; i++) {
-        destaddr.sin_port = htons(ports[i]);
 
-        // Send default message
-        // Recieve response
-        // Check which puzzle it is
+        // Set the current port as the desination address
+        destaddr.sin_port = htons(ports[i]);
+       
+        std::string m = "Hello!"; // Message
+
+        // Keep track of whether responses are recieved
+        bool receivedResponse = false;
+
+        int bytesSent;      // Number of bytes sendto() sent
+        int bytesReceived;  // Number of bytes recvfrom() received
+        char buffer[2048];
+
+        // Try sending to port 3 times before giving up 
+        for (int attempt = 0; attempt < 3; attempt++) {
+
+            // Send message to current port
+            if ((bytesSent = sendto(sockfd, m.c_str(), m.length(), 0, (struct sockaddr*)&destaddr, sizeof(destaddr) )) < 0) {
+                perror("Error sending");
+                exit(1);
+            }
+
+            // Set timeout for receiving a response
+			struct  timeval tv;
+			fd_set readfds;
+
+			tv.tv_sec = 2;
+			tv.tv_usec = 500000;
+
+            // Clear the socket watchlist and add socket to it
+			FD_ZERO(&readfds);
+			FD_SET(sockfd, &readfds);
+
+            // Wait until data is on the socket or timeout is reached
+			int result = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+
+            if (result > 0) {
+
+                // Store where response came from
+                struct sockaddr_in srcaddr;
+                socklen_t srcaddrlen = sizeof(srcaddr);
+
+                // Recieve the response and store it in the buffer
+                if ((bytesReceived = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr*)&srcaddr, &srcaddrlen)) < 0) {
+                    perror("Error receiving");
+                    exit(1);
+                };
+
+                // Make sure response came from the IP and port that was sent to
+                if (srcaddr.sin_addr.s_addr == destaddr.sin_addr.s_addr &&
+        			srcaddr.sin_port == destaddr.sin_port) {
+                        receivedResponse = true;
+                        break;
+				}        
+            }
+        }
         
+        // Converts response into a string
+        std::string response(buffer, bytesReceived);
+
+        // Find which puzzle the port belongs to
         // NOT SURE ABOUT THE PARAMETERS
-        // if response contains S.E.C.R.E.T?
-        /if () {
+        if (response.find("Sacred Elder Cipher Relay for Enchanted Transmissions") != std::string::npos) {
+            std::cout << ports[i] << " is the S.E.C.R.E.T. port" << std::endl; // JUST FOR DEBUGGING
             solveSecret(sockfd, destaddr);
         }
-
-        // if response contains Evil?
-        else if () {
+        else if(response.find("Evil") != std::string::npos) {
+            std::cout << ports[i] << " is the Evil port" << std::endl; // JUST FOR DEBUGGING
             solveEvil(sockfd, destaddr);
-
         }
-        // if response contains Guardian?
-        else if () {
-            solveGuardian(sockfd, destaddr);
+        else if(response.find("guardian") != std::string::npos) {
+            std::cout << ports[i] << " is the Guardian of the secret spell port" << std::endl; // JUST FOR DEBUGGING
+            solveGuardian(sockfd, destaddr); 
         }
-
-        // if response contains D.R.A.G.O.N?
-        else if () {
+        else if (response.find("D.R.A.G.O.N") != std::string::npos) {
+            std::cout << ports[i] << " is the D.R.A.G.O.N. port" << std::endl; // JUST FOR DEBUGGING
             solveDragon(sockfd, destaddr);
         }
+    }
 
-        }
+    close(sockfd);
+    return 0;     
+
+}
 
     
-    close(sockfd);
-
-    return 0;
-}	
+   

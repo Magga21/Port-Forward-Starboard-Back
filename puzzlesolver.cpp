@@ -97,74 +97,49 @@ void solveSecret(int sockfd, sockaddr_in destaddr) {
     // Get hidden secret
     // The predefined number
 
+    // Create secret number
     uint32_t my_int = 21;
 
     std::string str = "S.E.C.R.E.T.:katrinth25,margretf24,";
-    """
+
+    /*
     sizeof(my_int) // get byte of int
 
     str.length() // get bite of string 
 
     &my_int // memory of int
-    """
+    */
 
     const char *cp = (char*)&my_int;
 
     str.append(cp ,sizeof(my_int));
 
-    int ret;
-    
-    if ((ret = sendto(sockfd, str.c_str() , str.length(), 0, (struct sockaddr*)&destaddr, sizeof(destaddr) )) < 0)
-    {
-        perror("Error sending");
-        exit(1);
+    if (!sendMessage(sockfd, destaddr, str.c_str(), str.length())) {
+        return;
     }
-    
-    // create a time interval
-    struct  timeval tv;
-    fd_set readfds;
-
-    tv.tv_sec = 2;
-    tv.tv_usec = 500000;
-
-    // Clear the watchlist and put new data into the it
-    FD_ZERO(&readfds);
-    FD_SET(sockfd, &readfds);
 
     char buffer[2048];
-    // Store where response came from
-    struct sockaddr_in srcaddr;
-    socklen_t srcaddrlen = sizeof(srcaddr);
 
-    // see if sockfd has any data, if no data after time out return 0
-    int result = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+    int bytesReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
 
-    if (result > 0) {
-    if ((ret = recvfrom(sockfd, buffer , sizeof(buffer), 0, 
-            (struct sockaddr*)&srcaddr, &srcaddrlen)) < 0){
+    if (bytesReceived == 5) {
 
-        perror("Error receiving");
+        uint8_t groupID = buffer[0];
 
-    } else {
+        uint32_t challenge;
 
-        if (ret == 5) {
-            uint8_t groupID = buffer[0];
-
-            uint32_t challenge;
-
-            memcpy(&challenge, &buffer[1],sizeof(challenge)); 
+        memcpy(&challenge, &buffer[1], sizeof(challenge)); 
             
-            uint32_t sigil = challenge ^ my_int;
+        uint32_t sigil = challenge ^ my_int;
 
-            char sigilSent[5];
+        char sigilSent[5];
 
-            memcpy(&sigilSent, &groupID, sizeof(groupID));
+        memcpy(&sigilSent, &groupID, sizeof(groupID));
 
-            memcpy(&sigilSent[1], &sigil, sizeof(sigil));
-            
-            sendto(sockfd, sigilSent, sizeof(sigilSent), 0, (struct sockaddr*)&destaddr, sizeof(destaddr) )
-            
-            }
+        memcpy(&sigilSent[1], &sigil, sizeof(sigil));
+
+        if (!sendMessage(sockfd, destaddr, sigilSent, sizeof(sigilSent))) {
+            return;
         }
     }
 }
@@ -247,9 +222,6 @@ int main(int argc, const char* argv[]){
                 receivedResponse = true;
                 break;
             }
-				        
-        }
-        }
         
         // Converts response into a string
         std::string response(buffer, bytesReceived);
@@ -272,6 +244,9 @@ int main(int argc, const char* argv[]){
             std::cout << ports[i] << " is the D.R.A.G.O.N. port" << std::endl; // JUST FOR DEBUGGING
             solveDragon(sockfd, destaddr);
         }
+
+    }
+}
 
     close(sockfd);
     return 0;  

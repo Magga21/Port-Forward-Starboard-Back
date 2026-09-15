@@ -7,10 +7,94 @@
 #include <cstring>
 #include <iostream>
 #include <unistd.h>
+#include <vector>
+#include <cstdint>
+
+// UDP helper functions
+bool sendMessage(
+    int sockfd, 
+    sockaddr_in destaddr, 
+    const void* data, 
+    size_t dataSize
+) {    
+    int bytesSent = sendto(
+        sockfd, 
+        data,
+        dataSize,
+        0,
+        (struct sockaddr*)&destaddr,
+        sizeof(destaddr)
+    );
+
+    if (bytesSent < 0) {
+        perror("Error sending");
+        return false;
+    }
+
+    return true;
+}
+
+int receiveMessage(
+    int sockfd,
+    sockaddr_in destaddr,
+    char* buffer,
+    int bufferSize
+) {
+    // Set timeout for receiving a response
+	struct  timeval tv;
+	fd_set readfds;
+
+	tv.tv_sec = 2;
+	tv.tv_usec = 500000;
+
+    // Clear the socket watchlist and add socket to it
+	FD_ZERO(&readfds);
+	FD_SET(sockfd, &readfds);
+
+    // Wait until data is on the socket or timeout is reached
+	int result = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+
+    if (result <= 0) { 
+        return -1;
+    }
+
+    // Store where response came from
+    struct sockaddr_in srcaddr;
+    socklen_t srcaddrlen = sizeof(srcaddr);
+
+    // Recieve the response and store it in the buffer
+    int bytesReceived = recvfrom(
+        sockfd, 
+        buffer, 
+        bufferSize, 
+        0, 
+        (struct sockaddr*)&srcaddr, 
+        &srcaddrlen
+    );
+
+    if (bytesReceived < 0) {
+        perror("Error receiving");
+        return -1;
+    }
+
+    // Make sure response came from the IP and port that was sent to
+    if (srcaddr.sin_addr.s_addr != destaddr.sin_addr.s_addr || 
+        srcaddr.sin_port != destaddr.sin_port) {
+        return -1;
+	} 
+
+    return bytesReceived;
+}
 
 // Helper functions to solve the puzzles
 // NOT SURE ABOUT THE PARAMETERS!
 void solveSecret(int sockfd, sockaddr_in destaddr) {
+    // Combine string and secret number
+    // Send to port
+    // Split ports response into group ID and challange number
+    // secret_number xor challange_number = secret sigil
+    // final_message = group_ID + sigil
+    // Get hidden secret
     // The predefined number
 
     uint32_t my_int = 21;
@@ -148,7 +232,6 @@ int main(int argc, const char* argv[]){
         // Keep track of whether responses are recieved
         bool receivedResponse = false;
 
-        int bytesSent;      // Number of bytes sendto() sent
         int bytesReceived;  // Number of bytes recvfrom() received
         char buffer[2048];
 
@@ -156,44 +239,16 @@ int main(int argc, const char* argv[]){
         for (int attempt = 0; attempt < 3; attempt++) {
 
             // Send message to current port
-            if ((bytesSent = sendto(sockfd, m.c_str(), m.length(), 0, (struct sockaddr*)&destaddr, sizeof(destaddr) )) < 0) {
-                perror("Error sending");
-                exit(1);
+            sendMessage(sockfd, destaddr, m.data(), m.size());
+
+            bytesReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+
+            if (bytesReceived > 0) {
+                receivedResponse = true;
+                break;
             }
-
-            // Set timeout for receiving a response
-			struct  timeval tv;
-			fd_set readfds;
-
-			tv.tv_sec = 2;
-			tv.tv_usec = 500000;
-
-            // Clear the socket watchlist and add socket to it
-			FD_ZERO(&readfds);
-			FD_SET(sockfd, &readfds);
-
-            // Wait until data is on the socket or timeout is reached
-			int result = select(sockfd + 1, &readfds, NULL, NULL, &tv);
-
-            if (result > 0) {
-
-                // Store where response came from
-                struct sockaddr_in srcaddr;
-                socklen_t srcaddrlen = sizeof(srcaddr);
-
-                // Recieve the response and store it in the buffer
-                if ((bytesReceived = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr*)&srcaddr, &srcaddrlen)) < 0) {
-                    perror("Error receiving");
-                    exit(1);
-                };
-
-                // Make sure response came from the IP and port that was sent to
-                if (srcaddr.sin_addr.s_addr == destaddr.sin_addr.s_addr &&
-        			srcaddr.sin_port == destaddr.sin_port) {
-                        receivedResponse = true;
-                        break;
-				}        
-            }
+				        
+        }
         }
         
         // Converts response into a string
@@ -217,12 +272,13 @@ int main(int argc, const char* argv[]){
             std::cout << ports[i] << " is the D.R.A.G.O.N. port" << std::endl; // JUST FOR DEBUGGING
             solveDragon(sockfd, destaddr);
         }
-    }
 
     close(sockfd);
-    return 0;     
+    return 0;  
 
-}
+    }
+
+       
 
     
    

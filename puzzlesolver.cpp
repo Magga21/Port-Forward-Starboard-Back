@@ -10,7 +10,11 @@
 #include <vector>
 #include <cstdint>
 
-// UDP helper functions
+/*
+--------------------
+UDP HELPER FUNCTIONS
+--------------------
+*/
 bool sendMessage(
     int sockfd, 
     sockaddr_in destaddr, 
@@ -86,35 +90,22 @@ int receiveMessage(
     return bytesReceived;
 }
 
-// Helper functions to solve the puzzles
-// NOT SURE ABOUT THE PARAMETERS!
+/*
+-----------------------
+PUZZLE HELPER FUNCTIONS
+-----------------------
+*/
 void solveSecret(int sockfd, sockaddr_in destaddr) {
-    // Combine string and secret number
-    // Send to port
-    // Split ports response into group ID and challange number
-    // secret_number xor challange_number = secret sigil
-    // final_message = group_ID + sigil
-    // Get hidden secret
-    // The predefined number
+    uint32_t secretNumber = 21;
+    std::string message = "S.E.C.R.E.T.:katrinth25,margretf24,";
 
-    // Create secret number
-    uint32_t my_int = 21;
+    // 
+    const char* secretNumberBytes = reinterpret_cast<const char*>(&secretNumber);
+    
+    // 
+    message.append(secretNumberBytes ,sizeof(secretNumber));
 
-    std::string str = "S.E.C.R.E.T.:katrinth25,margretf24,";
-
-    /*
-    sizeof(my_int) // get byte of int
-
-    str.length() // get bite of string 
-
-    &my_int // memory of int
-    */
-
-    const char *cp = (char*)&my_int;
-
-    str.append(cp ,sizeof(my_int));
-
-    if (!sendMessage(sockfd, destaddr, str.c_str(), str.length())) {
+    if (!sendMessage(sockfd, destaddr, message.c_str(), message.length())) {
         return;
     }
 
@@ -122,36 +113,63 @@ void solveSecret(int sockfd, sockaddr_in destaddr) {
 
     int bytesReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
 
+    // Debugging
+    std::cout << "S.E.C.R.E.T. bytes received: " << bytesReceived << std::endl;
+
     if (bytesReceived == 5) {
 
+        // First byte of the response is the group ID
         uint8_t groupID = buffer[0];
 
-        uint32_t challenge;
+        uint32_t challengeNumber;
 
-        memcpy(&challenge, &buffer[1], sizeof(challenge)); 
-            
-        uint32_t sigil = challenge ^ my_int;
+        // Copy the next 4 bytes from the response into challengeNumber
+        memcpy(&challengeNumber, &buffer[1], sizeof(challengeNumber));
+        
+        // XOR the challenge number with the secret number
+        uint32_t sigil = challengeNumber ^ secretNumber;
 
-        char sigilSent[5];
+        // Debugging
+        std::cout << "Group ID: " << static_cast<int>(groupID) << std::endl;
+        std::cout << "Challenge: " << challengeNumber << std::endl;
+        std::cout << "Sigil: " << sigil << std::endl;
 
-        memcpy(&sigilSent, &groupID, sizeof(groupID));
+        // 5 byte response for group ID and sigil...
+        char sigilMessage[5];
 
-        memcpy(&sigilSent[1], &sigil, sizeof(sigil));
+        // 
+        memcpy(&sigilMessage, &groupID, sizeof(groupID));
 
-        if (!sendMessage(sockfd, destaddr, sigilSent, sizeof(sigilSent))) {
+        // 
+        memcpy(&sigilMessage[1], &sigil, sizeof(sigil));
+
+        if (!sendMessage(sockfd, destaddr, sigilMessage, sizeof(sigilMessage))) {
             return;
         }
+
+        // Receive hidden secret
+        int secretResponse = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+        
+        if (secretResponse > 0) {
+            // Debugging
+            std::string hiddenSecret(buffer, secretResponse);
+            std::cout << "Hidden secret: " << hiddenSecret << std::endl;
+        }
     }
+    return;
 }
 
+// NOT SURE ABOUT THE PARAMETERS!
 void solveEvil(int sockfd, sockaddr_in destaddr) {
 
 }
 
+// NOT SURE ABOUT THE PARAMETERS!
 void solveGuardian(int sockfd, sockaddr_in destaddr) {
 
 }
 
+// NOT SURE ABOUT THE PARAMETERS!
 void solveDragon(int sockfd, sockaddr_in destaddr) {
 
 }
@@ -222,7 +240,12 @@ int main(int argc, const char* argv[]){
                 receivedResponse = true;
                 break;
             }
-        
+        }
+
+        if (!receivedResponse) {
+            std::cout << "No response from port " << ports[i] << std::endl;
+            continue;
+}
         // Converts response into a string
         std::string response(buffer, bytesReceived);
 
@@ -246,7 +269,6 @@ int main(int argc, const char* argv[]){
         }
 
     }
-}
 
     close(sockfd);
     return 0;  

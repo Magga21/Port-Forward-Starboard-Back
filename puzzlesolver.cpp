@@ -10,7 +10,7 @@
 #include <vector>
 #include <cstdint>
 #include <netinet/ip.h>
-#include <netinet/upd.h>
+#include <netinet/udp.h>
 #include <cctype>
 #include <algorithm>
 #include <array>
@@ -144,6 +144,25 @@ int extractNumber(const std::string&message) {
     return numberString.empty() ? 0 : std::stoi(numberString);                
 }
 
+int extractNumber2(const std::string&message) {
+    std::string numberString = "";
+
+    // Starts from the character that's before the '!' at the end
+    // ((message.length()) - 1) is the '!' so we start at -2
+    for (int i = message.length() - 1; i >= 0; --i) {
+        if (std::isdigit(message[i])) {
+            numberString += message[i];
+        } else {
+            // Stop searching once there is a non digit
+            break;
+        }
+    }
+    // Reverse back to normal since digits were gathered in reverse order 
+    std::reverse(numberString.begin(), numberString.end());
+    // Convert string to an integer (returns 0 if no digits found)
+    return numberString.empty() ? 0 : std::stoi(numberString);                
+}
+
 /*
 ----------------
 PUZZLE FUNCTIONS
@@ -216,9 +235,16 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr) {
     return result;
 }
 
+struct EvilResult
+{
+    int hiddenPort2 = -1;
+};
+
 // NOT SURE ABOUT THE PARAMETERS!
-void solveEvil(int sockfd, sockaddr_in destaddr) {
+EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>& sigilMessage) {
     
+    EvilResult result;
+
     std::string startStr = "Hello!";
     
     // Create empty socket
@@ -253,26 +279,43 @@ void solveEvil(int sockfd, sockaddr_in destaddr) {
     iph->protocol = IPPROTO_UDP; //next layer protocol
     iph->daddr    = destaddr.sin_addr.s_addr; // destination ip addr
 
-    //UPD Header is straight after IPv4 header
+    sockaddr_in localaddr{};
+    socklen_t localLen = sizeof(localaddr);
 
+    if (getsockname(
+            sockfd,
+            (struct sockaddr*)&localaddr,
+            &localLen) < 0)
+    {
+        perror("getsockname");
+        close(sockEvil);
+        return result;
+    }
+
+    std::cout << "Local UDP port: "
+            << ntohs(localaddr.sin_port)
+            << std::endl;
+
+
+    //UPD Header is straight after IPv4 header
     struct udphdr *udph = (struct udphdr *)(packet + sizeof (struct iphdr));
 
-    udph->source = htons(12345);
+    udph->source = localaddr.sin_port;
     udph->dest = destaddr.sin_port;
     
     char *PayloadPrt = packet + sizeof(struct iphdr) + sizeof(struct udphdr);
 
-    std::memcpy(PayloadPrt, startStr.data(), payload.size());
+    std::memcpy(PayloadPrt, startStr.data(), startStr.size());
 
     udph->len   = htons(sizeof(struct udphdr) + startStr.size());
 
-    iph->tot_len = htons(sizeof(struct iphdr)+ sizeof(struct updhdr) + startStr.size())
+    iph->tot_len = htons(sizeof(struct iphdr)+ sizeof(struct udphdr) + startStr.size());
 
     iph->saddr  = 0;  // kernel chooses source IP
     iph->check  = 0;  // kernel calculates IPv4 checksum
     udph->check = 0;  // valid IPv4 UDP: checksum disabled
 
-    size_t packetSize = sizeof(struct iphdr) + sizeof(struct updhdr) + startStr.size();
+    size_t packetSize = sizeof(struct iphdr) + sizeof(struct udphdr) + startStr.size();
 
     udph->len = htons(sizeof(struct udphdr) + startStr.size());
 
@@ -282,10 +325,77 @@ void solveEvil(int sockfd, sockaddr_in destaddr) {
     if (!sendMessage(sockEvil, destaddr, packet, packetSize))
     {
         close(sockEvil);
-        return;
+        return result;
     }
 
+    char buffer[2048];
+
+    int byteReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+
+    if (byteReceived > 0)
+    {
+        std::string response(buffer, byteReceived);
+        std::cout << "Evil respons: " << response << std::endl;
+
+        // Clear old payload area
+        std::memset(PayloadPrt, 0, startStr.size());
+
+        // Put group ID + sigil into the payload
+        std::memcpy(
+            PayloadPrt,
+            sigilMessage.data(),
+            sigilMessage.size()
+        );
+
+        // UDP length = UDP header + 5-byte payload
+        udph->len = htons(
+            sizeof(struct udphdr) + sigilMessage.size()
+        );
+
+        // Entire IP packet length
+        packetSize =
+            sizeof(struct iphdr) +
+            sizeof(struct udphdr) +
+            sigilMessage.size();
+
+        iph->tot_len = htons(packetSize);
+
+        // Checksum will be recalculated
+        iph->check = 0;
+
+        if(!sendMessage(sockEvil, destaddr, packet, packetSize))
+        {
+            std::cerr << "Failed to send group ID and sigil" << std::endl;
+            close(sockEvil);
+            return result;
+        }
+
+        int finalBytes = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+
+        if(finalBytes > 0)
+        {
+            std::string finalResponse(buffer, finalBytes);
+            std::cout << "Evil final response: " << finalResponse << std::endl;
+
+                
+            result.hiddenPort2 = extractNumber2(finalResponse);
+            // Debugging
+            std::cout << "Hidden port 2: " << result.hiddenPort2 << std::endl;
+        }
+        else
+        {
+            std::cout << "No response after sending sigil" << std::endl;
+        }
+
+    }
+    else
+    {
+        std::cout << "No response from Evil port"  << std:: endl;
+    }
+    
+    
     close(sockEvil);
+    return result; 
 }
 
 // NOT SURE ABOUT THE PARAMETERS!
@@ -389,7 +499,7 @@ int main(int argc, const char* argv[]){
     SecretResult secretResult = solveSecret(sockfd, destaddr);
 
     destaddr.sin_port = htons(evilPort);
-    solveEvil(sockfd, destaddr);
+    EvilResult evilResult = solveEvil(sockfd, destaddr, secretResult.sigilMessage);
 
     destaddr.sin_port = htons(guardianPort);
     solveGuardian(sockfd, destaddr, secretResult.sigilMessage); 

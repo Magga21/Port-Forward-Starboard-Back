@@ -104,17 +104,21 @@ int retryMessage(
     // Try sending to port 3 times before giving up 
     for (int attempt = 0; attempt < 3; attempt++) {
 
+        // Send message
         if (!sendMessage(sockfd, destaddr, data, dataSize)) {
             return -1;
         }
 
+        // Wait and receive a response
         int bytesReceived = receiveMessage(sockfd, destaddr, buffer, bufferSize);
 
+        // Return the bytes if a response was received
         if (bytesReceived > 0) {
             return bytesReceived;
         }
     }
 
+    // Return -1 if no response was received
     return -1;
 }
 

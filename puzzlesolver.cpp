@@ -9,6 +9,9 @@
 #include <unistd.h>
 #include <vector>
 #include <cstdint>
+#include <cctype>
+#include <algorithm>
+#include <array>
 
 /*
 --------------------
@@ -90,12 +93,69 @@ int receiveMessage(
     return bytesReceived;
 }
 
+int retryMessage(
+    int sockfd,
+    sockaddr_in destaddr,
+    const void* data,
+    size_t dataSize,
+    char* buffer,
+    int bufferSize
+) { 
+    // Try sending to port 3 times before giving up 
+    for (int attempt = 0; attempt < 3; attempt++) {
+
+        if (!sendMessage(sockfd, destaddr, data, dataSize)) {
+            return -1;
+        }
+
+        int bytesReceived = receiveMessage(sockfd, destaddr, buffer, bufferSize);
+
+        if (bytesReceived > 0) {
+            return bytesReceived;
+        }
+    }
+
+    return -1;
+}
+
 /*
 -----------------------
 PUZZLE HELPER FUNCTIONS
 -----------------------
 */
-void solveSecret(int sockfd, sockaddr_in destaddr) {
+int extractNumber(const std::string&message) {
+    std::string numberString = "";
+
+    // Starts from the character that's before the '!' at the end
+    // ((message.length()) - 1) is the '!' so we start at -2
+    for (int i = message.length() - 2; i >= 0; --i) {
+        if (std::isdigit(message[i])) {
+            numberString += message[i];
+        } else {
+            // Stop searching once there is a non digit
+            break;
+        }
+    }
+    // Reverse back to normal since digits were gathered in reverse order 
+    std::reverse(numberString.begin(), numberString.end());
+    // Convert string to an integer (returns 0 if no digits found)
+    return numberString.empty() ? 0 : std::stoi(numberString);                
+}
+
+/*
+----------------
+PUZZLE FUNCTIONS
+----------------
+*/
+struct SecretResult {
+    std::array<char, 5> sigilMessage{};
+    int hiddenPort1 = -1;
+};
+
+SecretResult solveSecret(int sockfd, sockaddr_in destaddr) {
+
+    SecretResult result;
+
     uint32_t secretNumber = 21;
     std::string message = "S.E.C.R.E.T.:katrinth25,margretf24,";
 
@@ -105,13 +165,9 @@ void solveSecret(int sockfd, sockaddr_in destaddr) {
     // 
     message.append(secretNumberBytes ,sizeof(secretNumber));
 
-    if (!sendMessage(sockfd, destaddr, message.c_str(), message.length())) {
-        return;
-    }
-
     char buffer[2048];
 
-    int bytesReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+    int bytesReceived = retryMessage(sockfd, destaddr, message.c_str(), message.length(),buffer, sizeof(buffer));
 
     // Debugging
     std::cout << "S.E.C.R.E.T. bytes received: " << bytesReceived << std::endl;
@@ -134,29 +190,28 @@ void solveSecret(int sockfd, sockaddr_in destaddr) {
         std::cout << "Challenge: " << challengeNumber << std::endl;
         std::cout << "Sigil: " << sigil << std::endl;
 
-        // 5 byte response for group ID and sigil...
-        char sigilMessage[5];
+        // 
+        memcpy(&result.sigilMessage[0], &groupID, sizeof(groupID));
 
         // 
-        memcpy(&sigilMessage, &groupID, sizeof(groupID));
+        memcpy(&result.sigilMessage[1], &sigil, sizeof(sigil));
 
-        // 
-        memcpy(&sigilMessage[1], &sigil, sizeof(sigil));
-
-        if (!sendMessage(sockfd, destaddr, sigilMessage, sizeof(sigilMessage))) {
-            return;
+        if (!sendMessage(sockfd, destaddr, result.sigilMessage.data(), result.sigilMessage.size())) {
+            return result;
         }
 
         // Receive hidden secret
         int secretResponse = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
         
         if (secretResponse > 0) {
-            // Debugging
             std::string hiddenSecret(buffer, secretResponse);
+            result.hiddenPort1 = extractNumber(hiddenSecret);
+            // Debugging
             std::cout << "Hidden secret: " << hiddenSecret << std::endl;
+            std::cout << "Hidden port 1: " << result.hiddenPort1  << std::endl;
         }
     }
-    return;
+    return result;
 }
 
 // NOT SURE ABOUT THE PARAMETERS!
@@ -165,12 +220,12 @@ void solveEvil(int sockfd, sockaddr_in destaddr) {
 }
 
 // NOT SURE ABOUT THE PARAMETERS!
-void solveGuardian(int sockfd, sockaddr_in destaddr) {
+void solveGuardian(int sockfd, sockaddr_in destaddr, const std::array<char, 5>& sigilMessage) {
 
 }
 
 // NOT SURE ABOUT THE PARAMETERS!
-void solveDragon(int sockfd, sockaddr_in destaddr) {
+void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1) {
 
 }
 
@@ -214,7 +269,13 @@ int main(int argc, const char* argv[]){
 		exit(1);
 	}
 
-    // Loop through the ports to find which puzzle belongs to each port
+    // Variables to store port numbers
+    int secretPort = -1;
+    int evilPort = -1;
+    int guardianPort = -1;
+    int dragonPort = -1;
+
+    // Loop through the ports to find which puzzle belongs to which port
     for (int i = 0; i < 4; i++) {
 
         // Set the current port as the desination address
@@ -222,30 +283,16 @@ int main(int argc, const char* argv[]){
        
         std::string m = "Hello!"; // Message
 
-        // Keep track of whether responses are recieved
-        bool receivedResponse = false;
-
-        int bytesReceived;  // Number of bytes recvfrom() received
         char buffer[2048];
 
-        // Try sending to port 3 times before giving up 
-        for (int attempt = 0; attempt < 3; attempt++) {
+        int bytesReceived = retryMessage (sockfd, destaddr, m.data(), m.size(), buffer, sizeof(buffer));
+        
 
-            // Send message to current port
-            sendMessage(sockfd, destaddr, m.data(), m.size());
-
-            bytesReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
-
-            if (bytesReceived > 0) {
-                receivedResponse = true;
-                break;
-            }
+        if (bytesReceived < 0) {
+            std::cout << "No response from port" << ports[i] << std::endl;
+            continue;
         }
 
-        if (!receivedResponse) {
-            std::cout << "No response from port " << ports[i] << std::endl;
-            continue;
-}
         // Converts response into a string
         std::string response(buffer, bytesReceived);
 
@@ -253,27 +300,37 @@ int main(int argc, const char* argv[]){
         // NOT SURE ABOUT THE PARAMETERS
         if (response.find("Sacred Elder Cipher Relay for Enchanted Transmissions") != std::string::npos) {
             std::cout << ports[i] << " is the S.E.C.R.E.T. port" << std::endl; // JUST FOR DEBUGGING
-            solveSecret(sockfd, destaddr);
+            secretPort = ports[i];
         }
         else if(response.find("Evil") != std::string::npos) {
             std::cout << ports[i] << " is the Evil port" << std::endl; // JUST FOR DEBUGGING
-            solveEvil(sockfd, destaddr);
+            evilPort = ports[i];
         }
         else if(response.find("guardian") != std::string::npos) {
             std::cout << ports[i] << " is the Guardian of the secret spell port" << std::endl; // JUST FOR DEBUGGING
-            solveGuardian(sockfd, destaddr); 
+            guardianPort = ports[i];
         }
         else if (response.find("D.R.A.G.O.N") != std::string::npos) {
             std::cout << ports[i] << " is the D.R.A.G.O.N. port" << std::endl; // JUST FOR DEBUGGING
-            solveDragon(sockfd, destaddr);
+            dragonPort = ports[i];
         }
-
     }
+
+    destaddr.sin_port = htons(secretPort);
+    SecretResult secretResult = solveSecret(sockfd, destaddr);
+
+    destaddr.sin_port = htons(evilPort);
+    solveEvil(sockfd, destaddr);
+
+    destaddr.sin_port = htons(guardianPort);
+    solveGuardian(sockfd, destaddr, secretResult.sigilMessage); 
+
+    destaddr.sin_port = htons(dragonPort);
+    solveDragon(sockfd, destaddr, secretResult.hiddenPort1);
 
     close(sockfd);
     return 0;  
-
-    }
+}
 
        
 

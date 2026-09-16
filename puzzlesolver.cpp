@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <vector>
 #include <cstdint>
+#include <netinet/ip.h>
+#include <netinet/upd.h>
 
 /*
 --------------------
@@ -161,7 +163,74 @@ void solveSecret(int sockfd, sockaddr_in destaddr) {
 
 // NOT SURE ABOUT THE PARAMETERS!
 void solveEvil(int sockfd, sockaddr_in destaddr) {
+    
+    std::string startStr = "Hello!";
+    
+    // Create empty socket
+    int sockEvil = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
 
+    // If not empty abort
+    if(sockEvil < 0){
+        perror("Error creating evil socket");
+		exit(1);
+    }
+
+    int one = 1;
+    // Define that we'll make our own IPV4 header
+    if (setsockopt(sockEvil, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0 ){
+        perror("setsockopt IP_HDRINCL error");
+        close(sockEvil);
+        exit(1);
+    }
+
+    char packet[4096];
+    std::memset(packet, 0, sizeof(packet));
+
+    //Pointer to the IP header
+    struct iphdr *iph = (struct  iphdr *)packet;
+   
+    iph->version  = 4; //IPv4 v. 
+    iph->ihl      = 5; // Header length (5 * 32 bits = 20 bytes)
+    iph->tos      = 0; // Type of service / DSCP
+    iph->id       = htons(12345); //id num
+    iph->frag_off = htons(0x8000); //Fragment offset aka where our evil bit is
+    iph->ttl      = 64; //hop limit
+    iph->protocol = IPPROTO_UDP; //next layer protocol
+    iph->daddr    = destaddr.sin_addr.s_addr; // destination ip addr
+
+    //UPD Header is straight after IPv4 header
+
+    struct udphdr *udph = (struct udphdr *)(packet + sizeof (struct iphdr));
+
+    udph->source = htons(12345);
+    udph->dest = destaddr.sin_port;
+    
+    char *PayloadPrt = packet + sizeof(struct iphdr) + sizeof(struct udphdr);
+
+    std::memcpy(PayloadPrt, startStr.data(), payload.size());
+
+    udph->len   = htons(sizeof(struct udphdr) + startStr.size());
+
+    iph->tot_len = htons(sizeof(struct iphdr)+ sizeof(struct updhdr) + startStr.size())
+
+    iph->saddr  = 0;  // kernel chooses source IP
+    iph->check  = 0;  // kernel calculates IPv4 checksum
+    udph->check = 0;  // valid IPv4 UDP: checksum disabled
+
+    size_t packetSize = sizeof(struct iphdr) + sizeof(struct updhdr) + startStr.size();
+
+    udph->len = htons(sizeof(struct udphdr) + startStr.size());
+
+    iph->tot_len = htons(packetSize);
+
+
+    if (!sendMessage(sockEvil, destaddr, packet, packetSize))
+    {
+        close(sockEvil);
+        return;
+    }
+
+    close(sockEvil);
 }
 
 // NOT SURE ABOUT THE PARAMETERS!

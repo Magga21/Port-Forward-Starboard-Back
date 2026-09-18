@@ -125,12 +125,11 @@ int retryMessage(
 PUZZLE HELPER FUNCTIONS
 -----------------------
 */
-int extractNumber(const std::string&message) {
+int extractNumbers(const std::string&message, int startIndex) {
     std::string numberString = "";
 
-    // Starts from the character that's before the '!' at the end
-    // ((message.length()) - 1) is the '!' so we start at -2
-    for (int i = message.length() - 2; i >= 0; --i) {
+    
+    for (int i = startIndex; i >= 0; --i) {
         if (std::isdigit(message[i])) {
             numberString += message[i];
         } else {
@@ -144,24 +143,6 @@ int extractNumber(const std::string&message) {
     return numberString.empty() ? 0 : std::stoi(numberString);                
 }
 
-int extractNumber2(const std::string&message) {
-    std::string numberString = "";
-
-    // Starts from the character that's before the '!' at the end
-    // ((message.length()) - 1) is the '!' so we start at -2
-    for (int i = message.length() - 1; i >= 0; --i) {
-        if (std::isdigit(message[i])) {
-            numberString += message[i];
-        } else {
-            // Stop searching once there is a non digit
-            break;
-        }
-    }
-    // Reverse back to normal since digits were gathered in reverse order 
-    std::reverse(numberString.begin(), numberString.end());
-    // Convert string to an integer (returns 0 if no digits found)
-    return numberString.empty() ? 0 : std::stoi(numberString);                
-}
 
 /*
 ----------------
@@ -190,8 +171,6 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr) {
     hvað hann er að segja:
     secretNumberBytes should point to the same memory address as secretNumber,
     but treat the data at that address as char bytes.
-
-    
 
     */
     
@@ -238,7 +217,7 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr) {
         
         if (secretResponse > 0) {
             std::string hiddenSecret(buffer, secretResponse);
-            result.hiddenPort1 = extractNumber(hiddenSecret);
+            result.hiddenPort1 = extractNumbers(hiddenSecret, hiddenSecret.size() - 2 );
             // Debugging
             std::cout << "Hidden secret: " << hiddenSecret << std::endl;
             std::cout << "Hidden port 1: " << result.hiddenPort1  << std::endl;
@@ -252,7 +231,6 @@ struct EvilResult
     int hiddenPort2 = -1;
 };
 
-// NOT SURE ABOUT THE PARAMETERS!
 EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>& sigilMessage) {
     
     EvilResult result;
@@ -389,8 +367,8 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
             std::string finalResponse(buffer, finalBytes);
             std::cout << "Evil final response: " << finalResponse << std::endl;
 
-                
-            result.hiddenPort2 = extractNumber2(finalResponse);
+            
+            result.hiddenPort2 = extractNumbers(finalResponse, finalResponse.size() - 1);
             // Debugging
             std::cout << "Hidden port 2: " << result.hiddenPort2 << std::endl;
         }

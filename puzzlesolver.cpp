@@ -226,6 +226,52 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr) {
     return result;
 }
 
+size_t makeEvilPacket(char *packet, sockaddr_in destaddr, sockaddr_in localaddr, const char *payload, size_t payloadSize){
+
+    std::memset(packet, 0, 4096);
+
+    //Pointer to the IP header
+    struct iphdr *iph = (struct  iphdr *)packet;
+   
+    iph->version  = 4; //IPv4 v. 
+    iph->ihl      = 5; // Header length (5 * 32 bits = 20 bytes)
+    iph->tos      = 0; // Type of service / DSCP
+    iph->id       = htons(12345); //id num
+    iph->frag_off = htons(0x8000); //Fragment offset aka where our evil bit is
+    iph->ttl      = 64; //hop limit
+    iph->protocol = IPPROTO_UDP; //next layer protocol
+    iph->daddr    = destaddr.sin_addr.s_addr; // destination ip addr
+
+
+    //UPD Header is straight after IPv4 header
+    struct udphdr *udph = (struct udphdr *)(packet + sizeof (struct iphdr));
+
+    udph->source = localaddr.sin_port;
+    udph->dest = destaddr.sin_port;
+    
+    char *PayloadPrt = packet + sizeof(struct iphdr) + sizeof(struct udphdr);
+
+    std::memcpy(PayloadPrt, payload, payloadSize);
+
+    udph->len   = htons(sizeof(struct udphdr) + payloadSize);
+
+    iph->tot_len = htons(sizeof(struct iphdr)+ sizeof(struct udphdr) + payloadSize);
+
+    iph->saddr  = 0;  // kernel chooses source IP
+    iph->check  = 0;  // kernel calculates IPv4 checksum
+    udph->check = 0;  // valid IPv4 UDP: checksum disabled
+
+    size_t packetSize = sizeof(struct iphdr) + sizeof(struct udphdr) + payloadSize;
+
+    udph->len = htons(sizeof(struct udphdr) + payloadSize);
+
+    iph->tot_len = htons(packetSize);
+
+    return packetSize;
+
+}
+
+
 struct EvilResult
 {
     int hiddenPort2 = -1;
@@ -255,20 +301,8 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
     }
 
     char packet[4096];
-    std::memset(packet, 0, sizeof(packet));
 
-    //Pointer to the IP header
-    struct iphdr *iph = (struct  iphdr *)packet;
-   
-    iph->version  = 4; //IPv4 v. 
-    iph->ihl      = 5; // Header length (5 * 32 bits = 20 bytes)
-    iph->tos      = 0; // Type of service / DSCP
-    iph->id       = htons(12345); //id num
-    iph->frag_off = htons(0x8000); //Fragment offset aka where our evil bit is
-    iph->ttl      = 64; //hop limit
-    iph->protocol = IPPROTO_UDP; //next layer protocol
-    iph->daddr    = destaddr.sin_addr.s_addr; // destination ip addr
-
+    
     sockaddr_in localaddr{};
     socklen_t localLen = sizeof(localaddr);
 
@@ -282,35 +316,15 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
         return result;
     }
 
-    std::cout << "Local UDP port: "
-            << ntohs(localaddr.sin_port)
-            << std::endl;
+    std::cout << "Local UDP port: " << ntohs(localaddr.sin_port) << std::endl;
 
-
-    //UPD Header is straight after IPv4 header
-    struct udphdr *udph = (struct udphdr *)(packet + sizeof (struct iphdr));
-
-    udph->source = localaddr.sin_port;
-    udph->dest = destaddr.sin_port;
-    
-    char *PayloadPrt = packet + sizeof(struct iphdr) + sizeof(struct udphdr);
-
-    std::memcpy(PayloadPrt, startStr.data(), startStr.size());
-
-    udph->len   = htons(sizeof(struct udphdr) + startStr.size());
-
-    iph->tot_len = htons(sizeof(struct iphdr)+ sizeof(struct udphdr) + startStr.size());
-
-    iph->saddr  = 0;  // kernel chooses source IP
-    iph->check  = 0;  // kernel calculates IPv4 checksum
-    udph->check = 0;  // valid IPv4 UDP: checksum disabled
-
-    size_t packetSize = sizeof(struct iphdr) + sizeof(struct udphdr) + startStr.size();
-
-    udph->len = htons(sizeof(struct udphdr) + startStr.size());
-
-    iph->tot_len = htons(packetSize);
-
+    packetSize = makeEvilPacket(
+        packet,
+        destaddr,
+        localaddr,
+        startStr.data(),
+        startStr.size()
+    );
 
     if (!sendMessage(sockEvil, destaddr, packet, packetSize))
     {
@@ -327,31 +341,14 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
         std::string response(buffer, byteReceived);
         std::cout << "Evil respons: " << response << std::endl;
 
-        // Clear old payload area
-        std::memset(PayloadPrt, 0, startStr.size());
-
-        // Put group ID + sigil into the payload
-        std::memcpy(
-            PayloadPrt,
+        // Packet2 with groupID and sigil
+        packetSize = makeEvilPacket(
+            packet,
+            destaddr,
+            localaddr,
             sigilMessage.data(),
             sigilMessage.size()
         );
-
-        // UDP length = UDP header + 5-byte payload
-        udph->len = htons(
-            sizeof(struct udphdr) + sigilMessage.size()
-        );
-
-        // Entire IP packet length
-        packetSize =
-            sizeof(struct iphdr) +
-            sizeof(struct udphdr) +
-            sigilMessage.size();
-
-        iph->tot_len = htons(packetSize);
-
-        // Checksum will be recalculated
-        iph->check = 0;
 
         if(!sendMessage(sockEvil, destaddr, packet, packetSize))
         {

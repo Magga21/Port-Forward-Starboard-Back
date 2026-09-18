@@ -318,7 +318,7 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
 
     std::cout << "Local UDP port: " << ntohs(localaddr.sin_port) << std::endl;
 
-    packetSize = makeEvilPacket(
+    size_t packetSize = makeEvilPacket(
         packet,
         destaddr,
         localaddr,

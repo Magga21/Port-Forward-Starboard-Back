@@ -385,13 +385,18 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
     return result; 
 }
 
+struct GuardianResult
+{
+    int hiddenPort3 = -1;
+};
+
 // NOT SURE ABOUT THE PARAMETERS!
-void solveGuardian(int sockfd, sockaddr_in destaddr, const std::array<char, 5>& sigilMessage) {
+GuardianResult solveGuardian(int sockfd, sockaddr_in destaddr, const std::array<char, 5>& sigilMessage) {
 
 }
 
 // NOT SURE ABOUT THE PARAMETERS!
-void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1) {
+void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPort2, int hiddenPort3) {
 
 }
 
@@ -489,10 +494,10 @@ int main(int argc, const char* argv[]){
     EvilResult evilResult = solveEvil(sockfd, destaddr, secretResult.sigilMessage);
 
     destaddr.sin_port = htons(guardianPort);
-    solveGuardian(sockfd, destaddr, secretResult.sigilMessage); 
+    GuardianResult guardianResult = solveGuardian(sockfd, destaddr, secretResult.sigilMessage); 
 
     destaddr.sin_port = htons(dragonPort);
-    solveDragon(sockfd, destaddr, secretResult.hiddenPort1);
+    solveDragon(sockfd, destaddr, secretResult.hiddenPort1, evilResult.hiddenPort2, guardianResult.hiddenPort3);
 
     close(sockfd);
     return 0;  

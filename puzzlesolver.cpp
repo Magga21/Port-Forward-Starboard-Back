@@ -565,8 +565,131 @@ DRAGON PUZZLE SOLVER
 ----------------------
 */
 // NOT SURE ABOUT THE PARAMETERS!
-void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1)
+void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPort2, const std::string &spell, const std::array<char, 5> &sigilMessage)
 {
+
+    std::cout << "\n=== Solving the D.R.A.G.O.N. puzzle ===" << std::endl;
+    std::cout << "TEST NEW DRAGON CODE 12345" << std::endl;
+
+    std::string hellostr = "Hello!";
+
+    std::cout << "hiddenPort1 = " << hiddenPort1 << std::endl;
+    std::cout << "hiddenPort2 = " << hiddenPort2 << std::endl;
+
+
+    std::string portList = (std::to_string(hiddenPort1)) + "," + (std::to_string(hiddenPort2));
+
+    std::cout << "portList = [" << portList << "]" << std::endl;
+    std::cout << "portList length = " << portList.size() << std::endl;
+
+    sendMessage(sockfd, destaddr, portList.c_str(), portList.length());
+
+    char buffer[2048];
+
+    int bytesReceived= receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+
+    if (bytesReceived > 0)
+    {
+        std::string response(buffer, bytesReceived);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
+    else
+    {
+        std::cout << "No response from Dragon" << std::endl;
+        return;
+    }
+
+    std::vector<char> knock;
+
+    knock.insert (
+        knock.end(),
+        sigilMessage.begin(),
+        sigilMessage.end()
+    );
+
+    knock.insert (
+        knock.end(),
+        spell.begin(),
+        spell.end()
+    );
+
+
+    // knock.resize(sigilMessage.size() + spell.size());
+
+
+
+    // std::memcpy(
+    //     knock.data(),
+    //     sigilMessage.data(),
+    //     sigilMessage.size()
+    // );
+
+    // std::memcpy(
+    //     knock.data() + sigilMessage.size(),
+    //     spell.data(),
+    //     spell.size()
+    // );
+
+    struct sockaddr_in firstdestaddr = destaddr;
+    struct sockaddr_in seconddestaddr = destaddr;
+
+    firstdestaddr.sin_port = htons(hiddenPort1);
+    seconddestaddr.sin_port = htons(hiddenPort2);
+
+
+    sendMessage(sockfd, seconddestaddr, knock.data(), knock.size());
+    int r1 = receiveMessage(sockfd, seconddestaddr ,buffer, sizeof(buffer));
+
+      if (r1 > 0)
+    {
+        std::string response(buffer, r1);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
+
+    sendMessage(sockfd, firstdestaddr, knock.data(), knock.size());
+    int r2 = receiveMessage(sockfd, firstdestaddr ,buffer, sizeof(buffer));
+
+    if (r2 > 0)
+    {
+        std::string response(buffer, r2);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
+
+    sendMessage(sockfd, firstdestaddr, knock.data(), knock.size());
+    int r3 = receiveMessage(sockfd, firstdestaddr ,buffer, sizeof(buffer));
+
+    if (r3 > 0)
+    {
+        std::string response(buffer, r3);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
+    sendMessage(sockfd, firstdestaddr, knock.data(), knock.size());
+    int r4 = receiveMessage(sockfd, firstdestaddr ,buffer, sizeof(buffer));
+
+    if (r4 > 0)
+    {
+        std::string response(buffer, r4);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
+        
+
+    sendMessage(sockfd, seconddestaddr, knock.data(), knock.size());
+    int r5 = receiveMessage(sockfd, seconddestaddr ,buffer, sizeof(buffer));
+
+    if (r5 > 0)
+    {
+        std::string response(buffer, r5);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
+
+    sendMessage(sockfd, seconddestaddr, knock.data(), knock.size());
+    int r6 = receiveMessage(sockfd, seconddestaddr ,buffer, sizeof(buffer));
+
+    if (r6 > 0)
+    {
+        std::string response(buffer, r6);
+        std::cout << "Dragon response: " << response << std::endl;
+    }
 }
 
 /*
@@ -680,7 +803,7 @@ int main(int argc, const char *argv[])
     // // Solve dragon port puzzle
     destaddr.sin_port = htons(dragonPort);
     // NOT SURE ABOUT PARAMETERS
-    solveDragon(sockfd, destaddr, secretResult.hiddenPort1);
+    solveDragon(sockfd, destaddr, secretResult.hiddenPort1, evilResult.hiddenPort2, guardianResult.spell, secretResult.sigilMessage);
 
     close(sockfd);
     return 0;

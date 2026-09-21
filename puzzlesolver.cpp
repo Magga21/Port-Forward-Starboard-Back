@@ -398,6 +398,8 @@ GuardianResult solveGuardian(int sockfd, sockaddr_in destaddr, const std::array<
 // NOT SURE ABOUT THE PARAMETERS!
 void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPort2, int hiddenPort3) {
 
+    std::stirng portList = (std::to_string(hiddenPort1)) + "," + (std::to_string(hiddenPort2)) + "," + (std::to_string(hiddenPort3));
+    
 }
 
 /*

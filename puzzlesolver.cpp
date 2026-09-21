@@ -195,17 +195,7 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr)
     std::string message = "S.E.C.R.E.T.:katrinth25,margretf24,";
 
     //
-    const char *secretNumberBytes = reinterpret_cast<const char *>(&secretNumber);
-
-    /*
-    Getum líka skrifað  ^ á þennan hátt:
     const char *secretNumberBytes = (const char *)&secretNumber;
-
-    hvað hann er að segja:
-    secretNumberBytes should point to the same memory address as secretNumber,
-    but treat the data at that address as char bytes.
-
-    */
 
     //
     message.append(secretNumberBytes, sizeof(secretNumber));

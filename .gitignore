@@ -38,6 +38,7 @@
 *.exe
 *.out
 *.app
+puzzlesolver
 
 # Build directories
 build/
@@ -48,7 +49,6 @@ build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
 install_manifest.txt
 compile_commands.json
 

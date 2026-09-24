@@ -218,10 +218,8 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr)
         // XOR the challenge number with the secret number
         uint32_t sigil = challengeNumber ^ secretNumber;
 
-        //
         memcpy(&result.sigilMessage[0], &groupID, sizeof(groupID));
 
-        //
         memcpy(&result.sigilMessage[1], &sigil, sizeof(sigil));
 
         if (!sendMessage(sockfd, destaddr, result.sigilMessage.data(), result.sigilMessage.size()))

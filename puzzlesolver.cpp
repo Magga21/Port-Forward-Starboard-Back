@@ -17,7 +17,6 @@
 #include <netinet/ip6.h>
 #include <sstream>
 
-
 /*
 --------------------
 UDP HELPER FUNCTIONS
@@ -40,7 +39,7 @@ bool sendMessage(int sockfd, sockaddr_in destaddr, const void *data, size_t data
 
 // Receives data from the expected destination address and returns the number of bytes received
 int receiveMessage(int sockfd, sockaddr_in destaddr, char *buffer, int bufferSize)
-{   
+{
     // Set maximum time to wait for a response
     struct timeval tv;
     fd_set readfds;
@@ -104,7 +103,6 @@ int retryMessage(int sockfd, sockaddr_in destaddr, const void *data, size_t data
     return -1;
 }
 
-
 /*
 ----------------------
 UDP CHECKSUM FUNCTIONS
@@ -119,7 +117,7 @@ uint32_t addBytePairs(uint32_t sum, const uint8_t *data, size_t length)
     {
         // Combine the two bytes into one 16 bit number
         uint16_t bytePair = (static_cast<uint16_t>(data[i]) << 8) | data[i + 1];
-       
+
         sum += bytePair;
     }
 
@@ -148,7 +146,7 @@ uint16_t udpChecksum(const ip6_hdr *ipv6, const udphdr *udp, const char *payload
     // Add the UDP length and protocol
     sum = addBytePairs(sum, reinterpret_cast<const uint8_t *>(&udpLength), sizeof(udpLength));
     sum = addBytePairs(sum, reinterpret_cast<const uint8_t *>(&protocol), sizeof(protocol));
-    
+
     // Add the UDP header and payload
     sum = addBytePairs(sum, reinterpret_cast<const uint8_t *>(udp), sizeof(struct udphdr));
     sum = addBytePairs(sum, reinterpret_cast<const uint8_t *>(payload), payloadLength);
@@ -165,7 +163,6 @@ uint16_t udpChecksum(const ip6_hdr *ipv6, const udphdr *udp, const char *payload
     // Return checksum in network byte order
     return htons(checksum);
 }
-
 
 /*
 -----------------------
@@ -195,7 +192,6 @@ int extractNumber(const std::string &message, int startIndex)
     // Convert the string to an integer or return 0 if no digits were found
     return numberString.empty() ? 0 : std::stoi(numberString);
 }
-
 
 /*
 --------------------
@@ -263,7 +259,7 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr)
     int secretResponse = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
 
     if (secretResponse <= 0)
-    { 
+    {
         std::cout << "-> Failed to receive hidden port" << std::endl;
         return result;
     }
@@ -272,11 +268,9 @@ SecretResult solveSecret(int sockfd, sockaddr_in destaddr)
     result.hiddenPort1 = extractNumber(hiddenSecret, hiddenSecret.size() - 2);
 
     std::cout << "-> Found first hidden port: " << result.hiddenPort1 << std::endl;
-    
-    
+
     return result;
 }
-
 
 /*
 ------------------
@@ -297,7 +291,7 @@ size_t makeEvilPacket(char *packet, sockaddr_in destaddr, sockaddr_in localaddr,
     iph->tos = 0;                          // Type of service / DSCP
     iph->id = htons(12345);                // id num
     iph->frag_off = htons(0x8000);         // Fragment offset aka where our evil bit is
-    iph->ttl = 64;                         // hop limit
+    iph->ttl = 64;                         // hop limit / time to live
     iph->protocol = IPPROTO_UDP;           // next layer protocol
     iph->daddr = destaddr.sin_addr.s_addr; // destination ip addr
 
@@ -307,13 +301,11 @@ size_t makeEvilPacket(char *packet, sockaddr_in destaddr, sockaddr_in localaddr,
     udph->source = localaddr.sin_port;
     udph->dest = destaddr.sin_port;
 
+    // pointer to where the payload starts in the packet, after the IP and UDP header
     char *PayloadPrt = packet + sizeof(struct iphdr) + sizeof(struct udphdr);
 
+    // copy the payload into the packet
     std::memcpy(PayloadPrt, payload, payloadSize);
-
-    udph->len = htons(sizeof(struct udphdr) + payloadSize);
-
-    iph->tot_len = htons(sizeof(struct iphdr) + sizeof(struct udphdr) + payloadSize);
 
     iph->saddr = 0;  // kernel chooses source IP
     iph->check = 0;  // kernel calculates IPv4 checksum
@@ -345,7 +337,7 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
     // Create empty socket
     int sockEvil = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
 
-    // If not empty abort
+    // If socket is not empty abort
     if (sockEvil < 0)
     {
         perror("Error creating evil socket");
@@ -353,6 +345,7 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
     }
 
     int one = 1;
+
     // Define that we'll make our own IPV4 header
     if (setsockopt(sockEvil, IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0)
     {
@@ -366,6 +359,7 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
     sockaddr_in localaddr{};
     socklen_t localLen = sizeof(localaddr);
 
+    // Get Local address and port for UDP socket
     if (getsockname(
             sockfd,
             (struct sockaddr *)&localaddr,
@@ -375,8 +369,6 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
         close(sockEvil);
         return result;
     }
-
-    std::cout << "Local UDP port: " << ntohs(localaddr.sin_port) << std::endl;
 
     size_t packetSize = makeEvilPacket(
         packet,
@@ -431,6 +423,7 @@ EvilResult solveEvil(int sockfd, sockaddr_in destaddr, const std::array<char, 5>
             std::cout << "No response after sending sigil" << std::endl;
         }
     }
+
     else
     {
         std::cout << "No response from Evil port" << std::endl;
@@ -577,7 +570,7 @@ GuardianResult solveGuardian(int sockfd, sockaddr_in destaddr, const std::array<
             {
                 // Extract the secret spell
                 result.spell = responseMessage.substr(openingQuote + 1, closingQuote - openingQuote - 1);
-            } 
+            }
         }
         responseCount++;
     }
@@ -595,59 +588,55 @@ GuardianResult solveGuardian(int sockfd, sockaddr_in destaddr, const std::array<
     return result;
 }
 
-
 /*
 ----------------------
 DRAGON PUZZLE SOLVER
 ----------------------
 */
-// NOT SURE ABOUT THE PARAMETERS!
 void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPort2, const std::string &spell, const std::array<char, 5> &sigilMessage)
 {
 
     std::cout << "\n=== Solving the D.R.A.G.O.N. puzzle ===" << std::endl;
-    std::cout << "TEST NEW DRAGON CODE 12345" << std::endl;
 
     std::string hellostr = "Hello!";
 
+    // Print the ports to see if they are -1
     std::cout << "hiddenPort1 = " << hiddenPort1 << std::endl;
     std::cout << "hiddenPort2 = " << hiddenPort2 << std::endl;
 
+    // If they're 1 one then retriving the ports failed and we opt out of the program
+    if (hiddenPort1 == -1 || hiddenPort2 == -1)
+    {
+        std::cerr << "Invalid hidden ports" << std::endl;
+        exit(1);
+    }
 
     std::string portList = (std::to_string(hiddenPort1)) + "," + (std::to_string(hiddenPort2));
-
-    std::cout << "portList = [" << portList << "]" << std::endl;
-    std::cout << "portList length = " << portList.size() << std::endl;
 
     sendMessage(sockfd, destaddr, portList.c_str(), portList.length());
 
     char buffer[2048];
 
-    std::vector<int> vals; 
+    // Create empty list of ints
+    std::vector<int> vals;
 
-    int bytesReceived= receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
+    int bytesReceived = receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
 
     if (bytesReceived > 0)
     {
         std::string response(buffer, bytesReceived);
         std::cout << "Dragon response: " << response << std::endl;
 
-        // convert response into a list of integers 
-        
-        std::stringstream ss (response);
+        // convert response into a list of integers
+        std::stringstream ss(response);
         std::string item;
 
         while (std::getline(ss, item, ','))
         {
             vals.push_back(std::stoi(item));
         }
-
-        for (int val : vals)
-        {
-            std::cout << val << std::endl;
-        }
-
     }
+
     else
     {
         std::cout << "No response from Dragon" << std::endl;
@@ -656,18 +645,15 @@ void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPo
 
     std::vector<char> knock;
 
-    knock.insert (
+    knock.insert(
         knock.end(),
         sigilMessage.begin(),
-        sigilMessage.end()
-    );
+        sigilMessage.end());
 
-    knock.insert (
+    knock.insert(
         knock.end(),
         spell.begin(),
-        spell.end()
-    );
-
+        spell.end());
 
     struct sockaddr_in firstdestaddr = destaddr;
     struct sockaddr_in seconddestaddr = destaddr;
@@ -675,7 +661,7 @@ void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPo
     firstdestaddr.sin_port = htons(hiddenPort1);
     seconddestaddr.sin_port = htons(hiddenPort2);
 
-    // make this a forloop that checks which port it has to send to and then send to said port. 
+    // make this a forloop that checks which port it has to send to and then send to said port.
     for (int i = 0; i < vals.size(); i++)
     {
         struct sockaddr_in targaddr;
@@ -696,12 +682,8 @@ void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPo
             std::string response(buffer, resp);
             std::cout << "Dragon response: " << response << std::endl;
         }
-        
-        
     }
-    
 }
-
 
 /*
 -------------

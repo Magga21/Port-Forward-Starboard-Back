@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <netinet/ip6.h>
+#include <sstream>
 
 /*
 --------------------
@@ -35,7 +36,7 @@ bool sendMessage(int sockfd, sockaddr_in destaddr, const void *data, size_t data
 }
 
 int receiveMessage(int sockfd, sockaddr_in destaddr, char *buffer, int bufferSize)
-{
+{   
     // Set timeout for receiving a response
     struct timeval tv;
     fd_set readfds;
@@ -576,12 +577,30 @@ void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPo
 
     char buffer[2048];
 
+    std::vector<int> vals; 
+
     int bytesReceived= receiveMessage(sockfd, destaddr, buffer, sizeof(buffer));
 
     if (bytesReceived > 0)
     {
         std::string response(buffer, bytesReceived);
         std::cout << "Dragon response: " << response << std::endl;
+
+        // convert response into a list of integers 
+        
+        std::stringstream ss (response);
+        std::string item;
+
+        while (std::getline(ss, item, ','))
+        {
+            vals.push_back(std::stoi(item));
+        }
+
+        for (int val : vals)
+        {
+            std::cout << val << std::endl;
+        }
+
     }
     else
     {
@@ -604,82 +623,37 @@ void solveDragon(int sockfd, sockaddr_in destaddr, int hiddenPort1, int hiddenPo
     );
 
 
-    // knock.resize(sigilMessage.size() + spell.size());
-
-
-
-    // std::memcpy(
-    //     knock.data(),
-    //     sigilMessage.data(),
-    //     sigilMessage.size()
-    // );
-
-    // std::memcpy(
-    //     knock.data() + sigilMessage.size(),
-    //     spell.data(),
-    //     spell.size()
-    // );
-
     struct sockaddr_in firstdestaddr = destaddr;
     struct sockaddr_in seconddestaddr = destaddr;
 
     firstdestaddr.sin_port = htons(hiddenPort1);
     seconddestaddr.sin_port = htons(hiddenPort2);
 
-
-    sendMessage(sockfd, seconddestaddr, knock.data(), knock.size());
-    int r1 = receiveMessage(sockfd, seconddestaddr ,buffer, sizeof(buffer));
-
-      if (r1 > 0)
+    // make this a forloop that checks which port it has to send to and then send to said port. 
+    for (int i = 0; i < vals.size(); i++)
     {
-        std::string response(buffer, r1);
-        std::cout << "Dragon response: " << response << std::endl;
-    }
+        struct sockaddr_in targaddr;
 
-    sendMessage(sockfd, firstdestaddr, knock.data(), knock.size());
-    int r2 = receiveMessage(sockfd, firstdestaddr ,buffer, sizeof(buffer));
+        if (vals[i] == hiddenPort1)
+        {
+            targaddr = firstdestaddr;
+        }
+        else if (vals[i] == hiddenPort2)
+        {
+            targaddr = seconddestaddr;
+        }
 
-    if (r2 > 0)
-    {
-        std::string response(buffer, r2);
-        std::cout << "Dragon response: " << response << std::endl;
-    }
-
-    sendMessage(sockfd, firstdestaddr, knock.data(), knock.size());
-    int r3 = receiveMessage(sockfd, firstdestaddr ,buffer, sizeof(buffer));
-
-    if (r3 > 0)
-    {
-        std::string response(buffer, r3);
-        std::cout << "Dragon response: " << response << std::endl;
-    }
-    sendMessage(sockfd, firstdestaddr, knock.data(), knock.size());
-    int r4 = receiveMessage(sockfd, firstdestaddr ,buffer, sizeof(buffer));
-
-    if (r4 > 0)
-    {
-        std::string response(buffer, r4);
-        std::cout << "Dragon response: " << response << std::endl;
-    }
+        sendMessage(sockfd, targaddr, knock.data(), knock.size());
+        int resp = receiveMessage(sockfd, targaddr, buffer, sizeof(buffer));
+        if (resp > 0)
+        {
+            std::string response(buffer, resp);
+            std::cout << "Dragon response: " << response << std::endl;
+        }
         
-
-    sendMessage(sockfd, seconddestaddr, knock.data(), knock.size());
-    int r5 = receiveMessage(sockfd, seconddestaddr ,buffer, sizeof(buffer));
-
-    if (r5 > 0)
-    {
-        std::string response(buffer, r5);
-        std::cout << "Dragon response: " << response << std::endl;
+        
     }
-
-    sendMessage(sockfd, seconddestaddr, knock.data(), knock.size());
-    int r6 = receiveMessage(sockfd, seconddestaddr ,buffer, sizeof(buffer));
-
-    if (r6 > 0)
-    {
-        std::string response(buffer, r6);
-        std::cout << "Dragon response: " << response << std::endl;
-    }
+    
 }
 
 /*
